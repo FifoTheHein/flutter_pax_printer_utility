@@ -78,3 +78,7 @@
 * (update) The minimum Flutter version is 3.7.3, matching the Dart 2.19.2 minimum
 * (update) README: usage examples for every feature, error codes, and release builds
 * (fix) `spaceSet` accepts the SDK's full 0-255 range; values above 127 used to fail. Values outside 0-255 throw an `ArgumentError`
+
+## 0.1.8
+
+* (update) Builds with Android Gradle plugin 9 and Gradle 9, as Flutter 3.50 requires: the standalone buildscript classpath is gone, `lintOptions` becomes `lint`, the namespace is set unconditionally and the manifest `package` attribute is dropped, Java moves to 17 and compileSdk to 36. The standalone Gradle wrapper moves to 9.5.0
