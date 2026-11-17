@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mahatech.flutter_pax_printer_utility">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
   <!-- Only what this plugin uses; library permissions are merged into every app that
        depends on it. Apps that use other PAX modules (card readers, PED, scanner) or the
