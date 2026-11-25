@@ -32,6 +32,14 @@ android {
 }
 
 dependencies {
-    implementation files('libs/NeptuneLiteApi_V4.26.00_20260408.jar')
+    // PAX POSLink Peripheries SDK V2.02.00G_20260228: the core library, the
+    // peripheries plugin and the PAX logging library it needs. The SDK's optional
+    // GLComm (Bluetooth and serial) and GLExtPrinter (Bluetooth printer) jars and its
+    // native libraries are not needed for the built-in printer.
+    implementation files('libs/POSLink_Core_Android_V2.00.13_20260228.jar')
+    implementation files('libs/POSLink_Peripheries_Android_Plugin_V2.02.00G_20260228.jar')
+    implementation files('libs/PaxLog_1.1.0_20260228.jar')
     implementation 'com.google.zxing:core:3.5.4'
+
+    testImplementation 'junit:junit:4.13.2'
 }

@@ -9,6 +9,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'sample_slips.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -405,6 +407,8 @@ class _HomePageState extends State<HomePage> {
       result = '$label: ${await job()}';
     } on PlatformException catch (e) {
       result = '$label failed: ${e.code} ${e.message} (${e.details})';
+    } on StateError catch (e) {
+      result = '$label failed: ${e.message}';
     }
     if (kDebugMode) {
       print(result);
@@ -439,6 +443,42 @@ class _HomePageState extends State<HomePage> {
                     'Status Printer: Disconnected',
                     textAlign: TextAlign.center,
                   ),
+            const Divider(),
+            const Text('Sample slips', textAlign: TextAlign.center),
+            ElevatedButton(
+              onPressed: () => _report('Fuel slip', SampleSlips.fuelSlip),
+              child: const Text("SAMPLE FUEL SLIP"),
+            ),
+            ElevatedButton(
+              onPressed: () => _report(
+                'Fuel slip (test card)',
+                () => SampleSlips.fuelSlip(testCard: true),
+              ),
+              child: const Text("SAMPLE FUEL SLIP, TEST CARD"),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  _report('Transaction receipt', SampleSlips.transactionReceipt),
+              child: const Text("SAMPLE TRANSACTION RECEIPT"),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  _report('Failed transaction', SampleSlips.failedTransaction),
+              child: const Text("SAMPLE FAILED TRANSACTION"),
+            ),
+            ElevatedButton(
+              onPressed: () => _report('Attendant slip', SampleSlips.attendantSlip),
+              child: const Text("SAMPLE ATTENDANT SLIP"),
+            ),
+            ElevatedButton(
+              onPressed: () => _report('Rulers', () => SampleSlips.rulers(576)),
+              child: const Text("PRINT WIDTH RULER"),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  _report('Long slip', () => SampleSlips.longSlip(150)),
+              child: const Text("LONG SLIP (150 LINES)"),
+            ),
             const Divider(),
             ElevatedButton(
               onPressed: () => _report(

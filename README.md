@@ -1,6 +1,9 @@
 # flutter_pax_printer_utility
 
-#### This package based on [PAX Device with NeptuneLiteApi](https://docs.hips.com/docs/pax-a920 "PAX Device") SDK
+#### This package is based on the PAX POSLink Peripheries SDK (V2.02.00G) for PAX Android terminals
+
+The plugin ships no native libraries, so apps that use it need nothing extra
+for Google Play's 16 KB page size requirement.
 
 ## Important: 
   **THIS PACKAGE WILL WORK ONLY IN ANDROID!**
@@ -26,7 +29,8 @@ with `minifyEnabled` and `shrinkResources` on; no build changes are needed.
 
 Printing works in two steps: calls such as `printStr`, `printRow` and
 `printBarcode` add to a print job, and `start` prints it. `init` starts a new
-job (it clears anything not yet printed and resets the font and spacing).
+job (it clears anything not yet printed and resets the font, spacing, indent,
+double size and invert).
 
 ```dart
 await FlutterPaxPrinterUtility.init;
@@ -38,6 +42,14 @@ final String? status = await FlutterPaxPrinterUtility.start(); // "Success", "Ou
 `init`, `getStatus` and `getPaperSize` are getters, so they have no `()`.
 All calls run in order on one background thread, and `start` waits until the
 slip has printed without blocking the app's UI.
+
+### How printing works
+
+The PAX POSLink Peripheries SDK prints whole images. The plugin builds each job
+from `init` to `start` into one page, laid out like the PAX printer's own
+fonts: `FONT_12_24` characters are 12 x 24 dots, so 32 fit on 58mm paper.
+`start` prints the page as one image. A slip of about 1,500 dot lines takes
+about 2.5 seconds on an A910S.
 
 ## Printer status
 
@@ -60,13 +72,14 @@ await FlutterPaxPrinterUtility.fontSet(
 // Extra dots between characters and between lines.
 await FlutterPaxPrinterUtility.spaceSet(0, 10); // each 0-255
 
-// Print darkness: 1 is the default; 50-500 sets a percentage of the default.
+// Print darkness: 1 is the default; 3 or 4 for two-layer thermal paper;
+// 50-500 sets a percentage.
 await FlutterPaxPrinterUtility.setGray(1);
 
-// Left margin in dots (0-300).
+// Left margin in dots, for the lines and images that follow.
 await FlutterPaxPrinterUtility.leftIndents(20);
 
-// '\n' starts a new line. The charset defaults to UTF-8 when null.
+// '\n' starts a new line. The charset argument is ignored.
 await FlutterPaxPrinterUtility.printStr('Thank you for your purchase\n', null);
 
 // Double width / height: the first flag is for ASCII characters, the second for others.
@@ -85,8 +98,10 @@ await FlutterPaxPrinterUtility.step(150);
 await FlutterPaxPrinterUtility.start();
 ```
 
-The PAX SDK has no bold setting; double width and height are the closest
-alternative.
+Text is drawn in a bold monospace font fitted to the font's dots; there is
+no separate bold setting. Latin-1 characters (including accented letters and
+the no-break space in currency amounts) use the ASCII font, other characters
+the second font.
 
 ## Rows
 
@@ -161,27 +176,33 @@ await FlutterPaxPrinterUtility.printQRReceipt('My Shop', 'Order 123', 'Table 4',
 ## Paper
 
 ```dart
-// Paper width: MM_58, MM_80, or UNKNOWN on terminals that can't report it.
+// Paper width: MM_58 or MM_80 on the models the PAX SDK lists, else UNKNOWN.
 final PaxPaperSize paper = await FlutterPaxPrinterUtility.getPaperSize;
 
 // Cut the paper: 0 = full cut, 1 = partial cut. Terminals without a cutter
 // throw PRINTER_ERROR (details: 100, "not support").
 await FlutterPaxPrinterUtility.cutPaper(0);
 
-// Dot lines printed so far, for aligning pre-printed slips.
+// Dot lines in the job so far; after start, in the job just printed.
 final int? dotLine = await FlutterPaxPrinterUtility.getDotLine();
+
+// Page width in dots for the next jobs (0 = the terminal's paper).
+await FlutterPaxPrinterUtility.setPrintWidth(576);
 ```
 
-PAX documents `getPaperSize` as supported on the SK700 only; other terminals,
-such as the A910S, return `UNKNOWN`.
+`getPaperSize` knows the models the PAX SDK lists with a print width (A920,
+A930, A80, E500, E600, E700, E800, SK600, SK700, SK800 and others). Other
+terminals, such as the A910S, return `UNKNOWN` and print on 384-dot (58mm)
+pages.
 
 ## Terminal information
 
 ```dart
 final String? serial = await PaxDeviceInfo.getSerial();
 final Map<String, String> info = await PaxDeviceInfo.getTermInfo();
-print(info['MODEL']);  // for example A910S
-print(info['AP_VER']); // firmware version
+print(info['MODEL']);    // for example A910S
+print(info['SN']);       // serial number
+print(info['FIRMWARE']); // PayDroid firmware, for example PayDroid_10.0.0_Sagittarius_V11.1.39_20250909
 ```
 
 The PAX SDK has no separate serial number or version for the built-in
@@ -190,8 +211,9 @@ printer, so these are the terminal's.
 ## Errors
 
 Calls throw a `PlatformException` when something goes wrong:
-- `PRINTER_ERROR`: the printer reported an error, for example a setting the
-  terminal does not support. `details` is the PAX SDK's error code.
+- `PRINTER_ERROR`: the printer reported an error, for example no paper or a
+  function the terminal does not support. `details` is the printer status
+  code: 2 = out of paper, 100 = not supported, and so on.
 - `PAX_ERROR`: any other native failure, for example a device without the PAX
   services.
 - `INVALID_BARCODE` / `BARCODE_TOO_WIDE`: see [Barcodes and QR codes](#barcodes-and-qr-codes).
@@ -227,9 +249,10 @@ try {
 - [✅] Set the left margin => `leftIndents`
 - [✅] Print rows like a receipt with custom width and alignment => `printRow`
 - [✅] Draw a divider line => `printDivider` (solid or dashed)
-- [✅] Get the paper size => `getPaperSize` (SK700 only)
+- [✅] Get the paper size => `getPaperSize` (models the PAX SDK lists)
+- [✅] Set the page width => `setPrintWidth`
 - [✅] Get the terminal's serial number => `PaxDeviceInfo.getSerial()`
-- [✅] Get the terminal's model and firmware versions => `PaxDeviceInfo.getTermInfo()`
+- [✅] Get the terminal's model, serial number and firmware version => `PaxDeviceInfo.getTermInfo()`
 - [ ] Combine with ESC/POS code you already have. Not possible: the PAX SDK has no way to send raw ESC/POS bytes to the printer.
 
 ## If you have an PAX Terminal printer and need help with integration process, just [Contact Me](https://saweria.co/overlays/qr?streamKey=54dc04b8045bb0355cde915ab1bb85b5&topLabel=MAHA&bottomLabel=Buy+Me+A+Coffe&backgroundColor=%232b9dfaFF&barcodeColor=%23000&username=maha)

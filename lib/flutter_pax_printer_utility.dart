@@ -4,13 +4,18 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-/// Prints on PAX terminals through the PAX NeptuneLiteApi SDK.
+/// Prints on PAX terminals through the PAX POSLink Peripheries SDK.
+///
+/// The SDK prints whole bitmaps, so the plugin builds each job (text, feeds
+/// and images, from [init] to [start]) into one page laid out like the PAX
+/// printer's own fonts, and prints it on [start].
 ///
 /// All calls run in order on one background thread. When the printer reports
-/// an error (for example no paper, or a setting the terminal does not
+/// an error (for example no paper, or a function the terminal does not
 /// support), the call throws a [PlatformException] with code `PRINTER_ERROR`;
-/// its `details` is the SDK's error code. Other native failures, such as a
-/// device without the PAX services, throw with code `PAX_ERROR`.
+/// its `details` is the printer status code (2 = out of paper, 100 = not
+/// supported). Other native failures, such as a device without the PAX
+/// services, throw with code `PAX_ERROR`.
 class FlutterPaxPrinterUtility {
   static const MethodChannel _channel =
       MethodChannel('flutter_pax_printer_utility');
@@ -137,9 +142,10 @@ class FlutterPaxPrinterUtility {
     return response;
   }
 
-  /// Prints a string with the specified charset.
+  /// Adds [text] to the print job; "\n" ends a line.
   ///
-  /// This method prints the specified [text] using the given [charset].
+  /// [charset] is no longer needed and is ignored: text is drawn from its
+  /// Unicode characters.
   ///
   /// Returns a [Future] that completes with a boolean indicating the success of the operation.
   static Future<bool?> printStr(String text, String? charset) async {
@@ -379,12 +385,12 @@ class FlutterPaxPrinterUtility {
     return paperSize.dots ~/ fontWidth;
   }
 
-  /// Gets the paper size the printer is set up for.
+  /// Gets the paper size of the terminal's printer.
   ///
-  /// Uses the PAX SDK's `IPrinter.getPrinterSize()`, which reports the paper
-  /// width in inches: 2 (58mm) or 3 (80mm). PAX documents it as supported on
-  /// the SK700 only (NeptuneLiteApi V4.26); other terminals, such as the
-  /// A910S, return [PaxPaperSize.UNKNOWN], as does any other value.
+  /// Uses the models the PAX SDK lists with a recommended print width (A920,
+  /// A930, E500, SK700 and others). Other terminals, such as the A910S, return
+  /// [PaxPaperSize.UNKNOWN] and print on 58mm (384-dot) pages unless
+  /// [setPrintWidth] chooses another width.
   static Future<PaxPaperSize> get getPaperSize async {
     final int? size = await _channel.invokeMethod('getPrinterSize');
     switch (size) {
@@ -395,6 +401,13 @@ class FlutterPaxPrinterUtility {
       default:
         return PaxPaperSize.UNKNOWN;
     }
+  }
+
+  /// Sets the page width in printer dots for jobs started after this, by
+  /// [init]. 0 (the default) uses the terminal's paper: 576 dots on the 80mm
+  /// models the PAX SDK lists, otherwise 384 (58mm).
+  static Future<bool?> setPrintWidth(int dots) async {
+    return await _channel.invokeMethod<bool>('setPrintWidth', {'dots': dots});
   }
 
   static List<String> _wrap(String text, int width) {

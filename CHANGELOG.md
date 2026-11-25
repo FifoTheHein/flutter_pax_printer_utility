@@ -82,3 +82,16 @@
 ## 0.1.8
 
 * (update) Builds with Android Gradle plugin 9 and Gradle 9, as Flutter 3.50 requires: the standalone buildscript classpath is gone, `lintOptions` becomes `lint`, the namespace is set unconditionally and the manifest `package` attribute is dropped, Java moves to 17 and compileSdk to 36. The standalone Gradle wrapper moves to 9.5.0
+
+## 0.2.0
+
+* (breaking) Prints through the PAX POSLink Peripheries SDK (V2.02.00G_20260228) instead of NeptuneLiteApi, as PAX advises for apps. The plugin ships no native libraries any more, so apps that use it meet Google Play's 16 KB page size requirement
+* (update) The SDK prints whole images, so the plugin builds each job from `init` to `start` into one page and prints it as one image. Text is laid out like the PAX printer's own fonts: each `EFontTypeAscii` / `EFontTypeExtCode` font is a cell of the named size in dots (`FONT_12_24` is 12 x 24), with `spaceSet`, `step`, `leftIndents`, `setDoubleWidth`, `setDoubleHeight` and `setInvert` working as before. Latin-1 characters use the ASCII font, other characters the second font
+* (update) Images wider than the paper (after the left indent) are scaled down to fit
+* (update) Added `setPrintWidth` to choose the page width in dots
+* (breaking) `printStr` ignores its `charset`: text is drawn from its Unicode characters
+* (breaking) `PaxDeviceInfo.getTermInfo()` returns `MODEL`, `SN` and `FIRMWARE` (the PayDroid firmware version). The SDK does not report separate processor, BIOS or monitor versions
+* (update) `getPaperSize` reports 58mm or 80mm for the models the SDK lists with a print width, and `UNKNOWN` for others
+* (update) `PRINTER_ERROR` details are still the printer status codes (2 = out of paper, 100 = not supported); statuses 98-102, 250 (cutter jam) and 251 (cover open) have messages
+* (update) The consumer R8 rules are the SDK's keep rules, plus `-dontwarn` rules for classes the SDK refers to but does not ship (GLComm, GLExtPrinter, Gson, OkHttp)
+* (update) Example app: sample receipts in the layout of a fuel point-of-sale app, a print-width ruler and a long slip
