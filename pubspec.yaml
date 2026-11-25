@@ -1,7 +1,7 @@
 name: flutter_pax_printer_utility
 description: Printing on PAX Android terminals from Flutter apps, based on the PAX POSLink Peripheries SDK.
 version: 0.2.0
-homepage: https://github.com/AuliaVailo/flutter_pax_printer_utility
+homepage: https://github.com/FifoTheHein/flutter_pax_printer_utility
 
 environment:
   sdk: ">=2.19.2 <4.0.0"
