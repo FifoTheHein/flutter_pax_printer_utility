@@ -275,7 +275,6 @@ try {
 - [✅] Set the page width => `setPrintWidth`
 - [✅] Get the terminal's serial number => `PaxDeviceInfo.getSerial()`
 - [✅] Get the terminal's model, serial number and firmware version => `PaxDeviceInfo.getTermInfo()`
-- [ ] Combine with ESC/POS code you already have. Not possible: the PAX SDK has no way to send raw ESC/POS bytes to the printer.
 
 ## Tested devices
 
