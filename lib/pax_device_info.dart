@@ -6,25 +6,25 @@ import 'package:flutter/services.dart';
 class PaxDeviceInfo {
   static const MethodChannel _channel = MethodChannel('pax_device_info');
 
-  /// Returns the terminal's serial number, as reported by the PAX SDK.
+  /// Returns the terminal's serial number, as reported by the PAX SDK
+  /// (`DeviceModel.getSN`).
   ///
-  /// Reads `ETermInfoKey.SN` from the terminal info first and falls back to
-  /// the SDK's base info. Throws a [PlatformException] with code `PAX_ERROR`
-  /// if the SDK is unavailable or reports no serial number.
+  /// Throws a [PlatformException] with code `PAX_ERROR` if the SDK reports no
+  /// serial number.
   static Future<String?> getSerial() async {
     return await _channel.invokeMethod<String>('getSerialNumber');
   }
 
-  /// Returns the terminal information the PAX SDK reports, keyed by
-  /// `ETermInfoKey` name: for example `MODEL`, `SN`, `AP_VER` (application
-  /// processor firmware), `SP_VER` (secure processor firmware), `BIOS_VER`
-  /// and `MON_VER`. Keys the terminal does not report are left out.
+  /// Returns what is known about the terminal:
   ///
-  /// The SDK does not report a separate version or serial number for the
-  /// built-in printer; these are the terminal's.
+  /// - `MODEL`: the model name (for example `A910S`)
+  /// - `SN`: the serial number from the PAX SDK
+  /// - `FIRMWARE`: the Android build ID, which on PAX terminals is the PayDroid
+  ///   firmware version (for example
+  ///   `PayDroid_10.0.0_Sagittarius_V11.1.39_20250909` on an A910S)
   ///
-  /// Throws a [PlatformException] with code `PAX_ERROR` if the SDK is
-  /// unavailable.
+  /// Keys without a value are left out. The PAX POSLink Peripheries SDK does
+  /// not report separate processor, BIOS or printer firmware versions.
   static Future<Map<String, String>> getTermInfo() async {
     final Map<Object?, Object?>? info =
         await _channel.invokeMethod<Map<Object?, Object?>>('getTermInfo');

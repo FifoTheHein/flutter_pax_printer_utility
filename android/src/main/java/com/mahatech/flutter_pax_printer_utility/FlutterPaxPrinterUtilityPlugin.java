@@ -7,12 +7,7 @@ import android.os.Looper;
 
 import androidx.annotation.NonNull;
 
-import com.pax.dal.IDAL;
-import com.pax.dal.entity.BaseInfo;
-import com.pax.dal.entity.EFontTypeAscii;
-import com.pax.dal.entity.EFontTypeExtCode;
-import com.pax.dal.entity.ETermInfoKey;
-import com.pax.dal.exceptions.PrinterDevException;
+import com.pax.poslinkperipheries.printer.DeviceModel;
 
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -39,12 +34,13 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
   /// Separate channel for terminal information, used by PaxDeviceInfo in Dart.
   private MethodChannel deviceInfoChannel;
   private static PrinterUtility printerUtility;
+  private static android.content.Context printerContext;
 
   /// All PAX SDK calls run on this one background thread, in the order Dart sent them.
   ///
-  /// IPrinter.start() is synchronous: it returns only when the slip has finished
-  /// printing, which takes seconds. Running it (and the slower getDal() / init()) on the
-  /// main thread froze the app's UI for the whole print. A single thread keeps print
+  /// start() is synchronous: it returns only when the slip has finished printing,
+  /// which takes seconds. Running it (and the SDK's first-use setup) on the main
+  /// thread would freeze the app's UI for the whole print. A single thread keeps print
   /// jobs strictly in order, so a second job's init() can never clear the buffer while
   /// an earlier job is still printing. Shared by all engines, like printerUtility.
   private static final ExecutorService printerThread = Executors.newSingleThreadExecutor(r -> {
@@ -82,7 +78,7 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
   }
 
   private interface PrinterCall {
-    void handle(@NonNull MethodCall call, @NonNull Result result) throws PrinterDevException;
+    void handle(@NonNull MethodCall call, @NonNull Result result) throws Exception;
   }
 
   /// A Result that replies on the main thread, as Flutter requires, and at most once.
@@ -117,16 +113,16 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
   }
 
   /// Runs [handler] on the printer thread. If it throws, Dart gets an error instead of
-  /// waiting forever for a reply: PRINTER_ERROR (details: the SDK's error code) for a
-  /// printer error such as no paper, PAX_ERROR for anything else.
+  /// waiting forever for a reply: PRINTER_ERROR (details: the printer status code) for
+  /// a printer error such as no paper, PAX_ERROR for anything else.
   private static void runOnPrinterThread(MethodCall call, Result result, PrinterCall handler) {
     final MainThreadResult reply = new MainThreadResult(result);
     printerThread.execute(() -> {
       try {
         handler.handle(call, reply);
-      } catch (PrinterDevException e) {
-        android.util.Log.e("PAX", call.method + " failed: " + e);
-        reply.error("PRINTER_ERROR", call.method + " failed: " + e.getMessage(), e.getErrCode());
+      } catch (PaxPrinterException e) {
+        android.util.Log.e("PAX", call.method + " failed: " + e.getMessage());
+        reply.error("PRINTER_ERROR", call.method + " failed: " + e.getMessage(), e.errCode);
       } catch (Throwable e) {
         android.util.Log.e("PAX", call.method + " failed", e);
         reply.error("PAX_ERROR", call.method + " failed: " + e, null);
@@ -138,7 +134,8 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
     channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "flutter_pax_printer_utility");
     channel.setMethodCallHandler(this);
-    printerUtility = new PrinterUtility(flutterPluginBinding.getApplicationContext());
+    printerContext = flutterPluginBinding.getApplicationContext();
+    printerUtility = new PrinterUtility(printerContext);
 
     deviceInfoChannel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "pax_device_info");
     deviceInfoChannel.setMethodCallHandler((call, result) ->
@@ -153,67 +150,32 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
         }));
   }
 
-  /// Replies with the terminal info the SDK reports (model, firmware versions, SN, ...),
-  /// keyed by ETermInfoKey name. Keys the terminal does not report are left out.
+  /// Replies with what is known about the terminal: MODEL (Android's model name),
+  /// SN (the serial number from the PAX SDK) and FIRMWARE (Android's build
+  /// display ID, which on PAX terminals is the PayDroid firmware version). Keys
+  /// without a value are left out.
   private void getTermInfo(@NonNull Result result) {
-    try {
-      IDAL dal = printerUtility.getDal();
-      if (dal == null) {
-        result.error("PAX_ERROR", "Failed to get DAL instance", null);
-        return;
-      }
-      Map<ETermInfoKey, String> termInfo = dal.getSys().getTermInfo();
-      Map<String, String> info = new java.util.HashMap<>();
-      if (termInfo != null) {
-        for (Map.Entry<ETermInfoKey, String> entry : termInfo.entrySet()) {
-          if (entry.getKey() != null && entry.getValue() != null) {
-            info.put(entry.getKey().name(), entry.getValue());
-          }
-        }
-      }
-      result.success(info);
-    } catch (Exception e) {
-      result.error("PAX_ERROR", e.getMessage(), null);
+    Map<String, String> info = new java.util.HashMap<>();
+    putIfPresent(info, "MODEL", android.os.Build.MODEL);
+    putIfPresent(info, "SN", DeviceModel.getSN(printerContext));
+    putIfPresent(info, "FIRMWARE", android.os.Build.DISPLAY);
+    result.success(info);
+  }
+
+  private static void putIfPresent(Map<String, String> map, String key, String value) {
+    if (value != null && !value.isEmpty()) {
+      map.put(key, value);
     }
   }
 
-  /// Replies with the terminal's serial number: ETermInfoKey.SN from the
-  /// terminal info, falling back to BaseInfo.getSn().
+  /// Replies with the terminal's serial number from the PAX SDK (DeviceModel.getSN).
   private void getSerialNumber(@NonNull Result result) {
-    try {
-      IDAL dal = printerUtility.getDal();
-      if (dal == null) {
-        result.error("PAX_ERROR", "Failed to get DAL instance", null);
-        return;
-      }
-
-      try {
-        Map<ETermInfoKey, String> termInfo = dal.getSys().getTermInfo();
-        if (termInfo != null) {
-          String serialNumber = termInfo.get(ETermInfoKey.SN);
-          if (serialNumber != null && !serialNumber.isEmpty()) {
-            result.success(serialNumber);
-            return;
-          }
-        }
-      } catch (Exception e) {
-        // getTermInfo is not supported on every terminal; fall back to getBaseInfo.
-      }
-
-      BaseInfo baseInfo = dal.getSys().getBaseInfo();
-      if (baseInfo == null) {
-        result.error("PAX_ERROR", "Failed to get base info from device", null);
-        return;
-      }
-      String serialNumber = baseInfo.getSn();
-      if (serialNumber == null || serialNumber.isEmpty()) {
-        result.error("PAX_ERROR", "Device serial number is empty", null);
-        return;
-      }
-      result.success(serialNumber);
-    } catch (Exception e) {
-      result.error("PAX_ERROR", e.getMessage(), null);
+    String serialNumber = DeviceModel.getSN(printerContext);
+    if (serialNumber == null || serialNumber.isEmpty()) {
+      result.error("PAX_ERROR", "Device serial number is empty", null);
+      return;
     }
+    result.success(serialNumber);
   }
 
   @Override
@@ -235,7 +197,7 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
 
   /// Handles every printer method. Runs on the printer thread; see printerThread.
   private void handlePrinterCall(@NonNull MethodCall call, @NonNull Result result)
-      throws PrinterDevException {
+      throws Exception {
     if (call.method.equals("init")) { // instant bind or init
       printerUtility.init();
       result.success(true);
@@ -285,38 +247,14 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
       final String status = printerUtility.start();
       result.success(status);
     } else if (call.method.equals("fontSet")) {
-      String asciiFontTypeString = call.argument("asciiFontType");
-      String cFontTypeString = call.argument("cFontType");
-
-      EFontTypeAscii asciiFontType = asciiFontTypeFromName(asciiFontTypeString);
-      EFontTypeExtCode cFontType;
-
-      if (cFontTypeString.equals("FONT_16_16")) {
-        cFontType = EFontTypeExtCode.FONT_16_16;
-      } else if (cFontTypeString.equals("FONT_24_24")) {
-        cFontType = EFontTypeExtCode.FONT_24_24;
-      }else if (cFontTypeString.equals("FONT_16_32")) {
-        cFontType = EFontTypeExtCode.FONT_16_32;
-      }else if (cFontTypeString.equals("FONT_24_48")) {
-        cFontType = EFontTypeExtCode.FONT_24_48;
-      }else if (cFontTypeString.equals("FONT_32_16")) {
-        cFontType = EFontTypeExtCode.FONT_32_16;
-      }else if (cFontTypeString.equals("FONT_48_24")) {
-        cFontType = EFontTypeExtCode.FONT_48_24;
-      }else if (cFontTypeString.equals("FONT_32_32")) {
-        cFontType = EFontTypeExtCode.FONT_32_32;
-      }else if (cFontTypeString.equals("FONT_48_48")) {
-        cFontType = EFontTypeExtCode.FONT_48_48;
-      } else {
-        cFontType = EFontTypeExtCode.FONT_16_16;
-      }
-      
-      printerUtility.fontSet(asciiFontType, cFontType);
+      printerUtility.fontSet(
+          fontOrDefault(call.argument("asciiFontType"), PageLayout.DEFAULT_ASCII_FONT),
+          fontOrDefault(call.argument("cFontType"), PageLayout.DEFAULT_EXT_FONT));
       result.success(true);
     } else if (call.method.equals("spaceSet")) {
       String wordSpace = call.argument("wordSpace");
       String lineSpace = call.argument("lineSpace");
-      printerUtility.spaceSet(unsignedByte("wordSpace", wordSpace), unsignedByte("lineSpace", lineSpace));
+      printerUtility.spaceSet(Integer.parseInt(wordSpace), Integer.parseInt(lineSpace));
       result.success(true);
     } else if (call.method.equals("printStr")) {
       String text = call.argument("text");
@@ -366,6 +304,10 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
       int thickness = call.argument("thickness");
       boolean dashed = call.argument("dashed");
       result.success(printerUtility.printBitmap(QRCodeUtil.dividerBitmap(width, thickness, dashed)));
+    } else if (call.method.equals("setPrintWidth")) {
+      int dots = call.argument("dots");
+      printerUtility.setPrintWidth(dots);
+      result.success(true);
     } else if (call.method.equals("getPrinterSize")) {
       result.success(printerUtility.getPrinterSize());
     } else if (call.method.equals("start")) {
@@ -405,51 +347,15 @@ public class FlutterPaxPrinterUtilityPlugin implements FlutterPlugin, MethodCall
     }
   }
 
-  /// Parses a 0-255 value for an SDK `byte` parameter. The SDK documents spacing up
-  /// to 255 in a (signed) Java byte, so values above 127 are passed as their
-  /// two's-complement byte, which the SDK reads as unsigned.
-  private static byte unsignedByte(String name, String value) {
-    final int parsed = Integer.parseInt(value);
-    if (parsed < 0 || parsed > 255) {
-      throw new IllegalArgumentException(name + " must be 0-255, was " + parsed);
-    }
-    return (byte) parsed;
-  }
-
-  /// Maps a Dart EFontTypeAscii name to the PAX SDK constant, defaulting to FONT_8_16.
-  ///
-  /// The PAX SDK marks FONT_16_24, FONT_16_48, FONT_32_24 and FONT_32_48 as deprecated
-  /// without naming a replacement. They still print on current terminals and are part
-  /// of this plugin's public Dart API, so they stay supported; the warning is suppressed
-  /// here only.
-  @SuppressWarnings("deprecation")
-  private static EFontTypeAscii asciiFontTypeFromName(String name) {
-    if (name.equals("FONT_8_16")) {
-      return EFontTypeAscii.FONT_8_16;
-    } else if (name.equals("FONT_16_24")) {
-      return EFontTypeAscii.FONT_16_24;
-    } else if (name.equals("FONT_12_24")) {
-      return EFontTypeAscii.FONT_12_24;
-    } else if (name.equals("FONT_8_32")) {
-      return EFontTypeAscii.FONT_8_32;
-    } else if (name.equals("FONT_16_48")) {
-      return EFontTypeAscii.FONT_16_48;
-    } else if (name.equals("FONT_12_48")) {
-      return EFontTypeAscii.FONT_12_48;
-    } else if (name.equals("FONT_16_16")) {
-      return EFontTypeAscii.FONT_16_16;
-    } else if (name.equals("FONT_32_24")) {
-      return EFontTypeAscii.FONT_32_24;
-    } else if (name.equals("FONT_24_24")) {
-      return EFontTypeAscii.FONT_24_24;
-    } else if (name.equals("FONT_16_32")) {
-      return EFontTypeAscii.FONT_16_32;
-    } else if (name.equals("FONT_32_48")) {
-      return EFontTypeAscii.FONT_32_48;
-    } else if (name.equals("FONT_24_48")) {
-      return EFontTypeAscii.FONT_24_48;
-    } else {
-      return EFontTypeAscii.FONT_8_16;
+  /// [name] if it is a FONT_<width>_<height> font name, else [fallback]. Unknown
+  /// names print in the default font, as with the earlier SDK.
+  private static String fontOrDefault(String name, String fallback) {
+    try {
+      PageLayout.fontCell(name);
+      return name;
+    } catch (IllegalArgumentException e) {
+      android.util.Log.w("PAX", "Unknown font " + name + ", using " + fallback);
+      return fallback;
     }
   }
 
