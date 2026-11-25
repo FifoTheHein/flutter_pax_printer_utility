@@ -90,6 +90,7 @@
 * (update) Images wider than the paper (after the left indent) are scaled down to fit
 * (update) Added `setPrintWidth` to choose the page width in dots
 * (breaking) `printStr` ignores its `charset`: text is drawn from its Unicode characters
+* (breaking) A printer error while printing (for example no paper) makes `start` and the `printReceipt` / `printReceiptWithQr` / `printQRReceipt` templates throw a `PlatformException` with code `PRINTER_ERROR` (`details`: the status code). Before, `start` returned the status as text ("Out of paper")
 * (breaking) `PaxDeviceInfo.getTermInfo()` returns `MODEL`, `SN` and `FIRMWARE` (the PayDroid firmware version). The SDK does not report separate processor, BIOS or monitor versions
 * (update) `getPaperSize` reports 58mm or 80mm for the models the SDK lists with a print width, and `UNKNOWN` for others
 * (update) `PRINTER_ERROR` details are still the printer status codes (2 = out of paper, 100 = not supported); statuses 98-102, 250 (cutter jam) and 251 (cover open) have messages
