@@ -10,8 +10,16 @@ for Google Play's 16 KB page size requirement.
 
 ## Installation
 
-```bash
-flutter pub add flutter_pax_printer_utility
+Add the plugin as a git dependency in your app's `pubspec.yaml`. The package
+on pub.dev is the original author's NeptuneLite-based version, without the
+changes described here.
+
+```yaml
+dependencies:
+  flutter_pax_printer_utility:
+    git:
+      url: https://github.com/FifoTheHein/flutter_pax_printer_utility.git
+      ref: 0.2.0
 ```
 
 ```dart
@@ -36,8 +44,11 @@ double size and invert).
 await FlutterPaxPrinterUtility.init;
 await FlutterPaxPrinterUtility.printStr('Hello from PAX\n', null);
 await FlutterPaxPrinterUtility.step(150); // feed 150 dots of blank paper after the text
-final String? status = await FlutterPaxPrinterUtility.start(); // "Success", "Out of paper", ...
+final String? status = await FlutterPaxPrinterUtility.start(); // "Success"
 ```
+
+If the printer reports an error while printing (for example no paper), `start`
+throws a `PlatformException` with code `PRINTER_ERROR`; see [Errors](#errors).
 
 `init`, `getStatus` and `getPaperSize` are getters, so they have no `()`.
 All calls run in order on one background thread, and `start` waits until the
@@ -48,8 +59,8 @@ slip has printed without blocking the app's UI.
 The PAX POSLink Peripheries SDK prints whole images. The plugin builds each job
 from `init` to `start` into one page, laid out like the PAX printer's own
 fonts: `FONT_12_24` characters are 12 x 24 dots, so 32 fit on 58mm paper.
-`start` prints the page as one image. A slip of about 1,500 dot lines takes
-about 2.5 seconds on an A910S.
+Text longer than a line wraps at the paper edge. `start` prints the page as
+one image. A slip of about 1,500 dot lines takes about 2.5 seconds on an A910S.
 
 ## Printer status
 
@@ -98,10 +109,15 @@ await FlutterPaxPrinterUtility.step(150);
 await FlutterPaxPrinterUtility.start();
 ```
 
-Text is drawn in a bold monospace font fitted to the font's dots; there is
-no separate bold setting. Latin-1 characters (including accented letters and
-the no-break space in currency amounts) use the ASCII font, other characters
-the second font.
+Every `EFontTypeAscii` and `EFontTypeExtCode` font works, including
+`FONT_16_24`, `FONT_16_48`, `FONT_32_24` and `FONT_32_48`, which NeptuneLite
+had deprecated: each font is a cell of the named size in dots. Text is drawn
+in a bold monospace font fitted to that cell; there is no separate bold
+setting. Latin-1 characters (including accented letters and the no-break space
+in currency amounts) use the ASCII font, other characters the second font.
+
+The gray level stays set across `init`; everything else in this section goes
+back to its default.
 
 ## Rows
 
@@ -163,9 +179,14 @@ await FlutterPaxPrinterUtility.printBitmap(pngBytes);
 await FlutterPaxPrinterUtility.start();
 ```
 
+Images print at their own size, starting at the left margin. An image wider
+than the paper (after the left margin) is scaled down to fit, keeping its
+shape.
+
 ## Templates
 
-Each template starts a new job, prints it and returns the status from `start`:
+Each template starts a new job and prints it, in `FONT_8_16` with 10 dots
+between lines. It returns "Success", or throws `PRINTER_ERROR` like `start`:
 
 ```dart
 await FlutterPaxPrinterUtility.printReceipt('My Shop\nTotal: R 99.00\n');
@@ -180,7 +201,7 @@ await FlutterPaxPrinterUtility.printQRReceipt('My Shop', 'Order 123', 'Table 4',
 final PaxPaperSize paper = await FlutterPaxPrinterUtility.getPaperSize;
 
 // Cut the paper: 0 = full cut, 1 = partial cut. Terminals without a cutter
-// throw PRINTER_ERROR (details: 100, "not support").
+// throw PRINTER_ERROR (details: 100, "Not supported").
 await FlutterPaxPrinterUtility.cutPaper(0);
 
 // Dot lines in the job so far; after start, in the job just printed.
@@ -193,7 +214,8 @@ await FlutterPaxPrinterUtility.setPrintWidth(576);
 `getPaperSize` knows the models the PAX SDK lists with a print width (A920,
 A930, A80, E500, E600, E700, E800, SK600, SK700, SK800 and others). Other
 terminals, such as the A910S, return `UNKNOWN` and print on 384-dot (58mm)
-pages.
+pages. A page wider than the printer is scaled down by the terminal to fit, so
+a wider `setPrintWidth` prints smaller, not cut off (seen on an A910S).
 
 ## Terminal information
 
@@ -211,9 +233,9 @@ printer, so these are the terminal's.
 ## Errors
 
 Calls throw a `PlatformException` when something goes wrong:
-- `PRINTER_ERROR`: the printer reported an error, for example no paper or a
-  function the terminal does not support. `details` is the printer status
-  code: 2 = out of paper, 100 = not supported, and so on.
+- `PRINTER_ERROR`: the printer reported an error, for example no paper while
+  `start` prints, or a function the terminal does not support. `details` is
+  the printer status code: 2 = out of paper, 100 = not supported, and so on.
 - `PAX_ERROR`: any other native failure, for example a device without the PAX
   services.
 - `INVALID_BARCODE` / `BARCODE_TOO_WIDE`: see [Barcodes and QR codes](#barcodes-and-qr-codes).
@@ -255,19 +277,9 @@ try {
 - [✅] Get the terminal's model, serial number and firmware version => `PaxDeviceInfo.getTermInfo()`
 - [ ] Combine with ESC/POS code you already have. Not possible: the PAX SDK has no way to send raw ESC/POS bytes to the printer.
 
-## If you have an PAX Terminal printer and need help with integration process, just [Contact Me](https://saweria.co/overlays/qr?streamKey=54dc04b8045bb0355cde915ab1bb85b5&topLabel=MAHA&bottomLabel=Buy+Me+A+Coffe&backgroundColor=%232b9dfaFF&barcodeColor=%23000&username=maha)
+## Tested devices
 
- - [Github](https://github.com/AuliaVailo)
- - [Email](mailto:abdul.haq.aulia@gmail.com)
- - [Youtube](https://www.youtube.com/channel/UC02Kasrd4--IzX2mNcI2tWg)
- - [LinkedIn](https://www.linkedin.com/in/moh-abdul-haq-aulia-29a925169/)
+- PAX A910S (32-bit, PayDroid V11.1.39): version 0.2.0
+- PAX A920: earlier NeptuneLite-based versions only
 
-## Tested Devices
-
-```bash
-PAX A920 
-PAX A910S
-```
-
-## Buy me a coffee
-If you want to support this package, you can [☕️ Buy Me a Coffee](https://www.buymeacoffee.com/abdulhaqaulia) <br>or you can scan this qr for support with [☕️ Saweria](https://saweria.co/overlays/qr?streamKey=54dc04b8045bb0355cde915ab1bb85b5&topLabel=MAHA&bottomLabel=Buy+Me+A+Coffe&backgroundColor=%232b9dfaFF&barcodeColor=%23000&username=maha)
+0.2.0 has not yet been tested on a 64-bit terminal.
