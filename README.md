@@ -278,7 +278,6 @@ try {
 
 ## Tested devices
 
-- PAX A910S (32-bit, PayDroid V11.1.39): version 0.2.0
+- PAX A910S (32-bit, Android 10, PayDroid V11.1.39): version 0.2.0
+- PAX A910S (64-bit, Android 12, PayDroid 12 Acacia V13.1.14): version 0.2.0
 - PAX A920: earlier NeptuneLite-based versions only
-
-0.2.0 has not yet been tested on a 64-bit terminal.
