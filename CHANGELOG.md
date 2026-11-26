@@ -96,3 +96,7 @@
 * (update) `PRINTER_ERROR` details are still the printer status codes (2 = out of paper, 100 = not supported); statuses 98-102, 250 (cutter jam) and 251 (cover open) have messages
 * (update) The consumer R8 rules are the SDK's keep rules, plus `-dontwarn` rules for classes the SDK refers to but does not ship (GLComm, GLExtPrinter, Gson, OkHttp)
 * (update) Example app: sample receipts in the layout of a fuel point-of-sale app, a print-width ruler and a long slip
+
+## 0.2.1
+
+* (update) The consumer R8 rules no longer keep all of zxing, only `com.google.zxing.BarcodeFormat`. R8 can now remove the zxing code an app doesn't use, so Google Play's DEX code optimization score for apps that use the plugin goes back up

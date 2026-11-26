@@ -13,7 +13,12 @@
 -keep class com.pax.posproto.** { *; }
 -keep class com.pax.us.** { *; }
 -keep class com.pax.poslinkperipheries.** { *; }
--keep class com.google.zxing.** { *; }
+
+# zxing: the SDK README keeps all of it, but neither the SDK nor this plugin
+# loads zxing classes by name except BarcodeFormat (named in the SDK's
+# PrintDataItem, and read with BarcodeFormat.valueOf by printBarcode). Keeping
+# only that enum lets R8 remove the rest of zxing that an app never uses.
+-keep enum com.google.zxing.BarcodeFormat { *; }
 
 # Classes the SDK's core library refers to but that are not part of the SDK
 # package or not used by the printer: the optional GLComm (Bluetooth and serial)
