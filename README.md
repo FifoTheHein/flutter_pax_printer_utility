@@ -19,7 +19,7 @@ dependencies:
   flutter_pax_printer_utility:
     git:
       url: https://github.com/FifoTheHein/flutter_pax_printer_utility.git
-      ref: 0.2.0
+      ref: 0.2.1
 ```
 
 ```dart
